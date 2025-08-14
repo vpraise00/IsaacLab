@@ -16,6 +16,14 @@ from isaaclab.app import AppLauncher
 import cli_args  # isort: skip
 
 
+# 추가: bool 문자열 파서
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v is None:
+        return False
+    return str(v).lower() in ("true", "1", "yes", "y", "on")
+
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
@@ -28,6 +36,9 @@ parser.add_argument("--max_iterations", type=int, default=None, help="RL Policy 
 parser.add_argument(
     "--distributed", action="store_true", default=False, help="Run training with multiple GPUs or nodes."
 )
+# Customized Metric Logger Option
+parser.add_argument("--metric_logging", type=str2bool, nargs="?", const=True, default=False, help="Enable metric logging.")
+
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
@@ -163,8 +174,15 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # wrap around environment for rsl-rl
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
-    # create runner from rsl-rl
-    runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
+    #Runner Selection create runner from rsl-rl
+    if args_cli.metric_logging:
+        from custom_runner import CustomOnPolicyRunner
+        print("[INFO] Metric logging enabled: using CustomOnPolicyRunner")
+        runner = CustomOnPolicyRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
+    else:
+        print("[INFO] Metric logging disabled: using OnPolicyRunner")
+        runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
+
     # write git state to logs
     runner.add_git_repo_to_log(__file__)
     # load the checkpoint
